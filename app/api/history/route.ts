@@ -1,18 +1,35 @@
+import { auth, clerkClient } from "@clerk/nextjs/server";
 import { prisma } from "@/lib/prisma";
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 
-export async function GET(req: NextRequest) {
+export async function GET() {
   try {
-    const userId = req.nextUrl.searchParams.get("userId");
+    // ✅ In Clerk v5, auth() is synchronous
+    const { userId } = await auth();
     if (!userId) {
-      return NextResponse.json({ error: "Missing userId" }, { status: 400 });
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    // ✅ Ensure user exists in DB
+    const client = await clerkClient();
+    const clerkUser = await client.users.getUser(userId);
+    const email = clerkUser.emailAddresses[0]?.emailAddress ?? null;
+
+    if (email) {
+      await prisma.user.upsert({
+        where: { id: userId },
+        update: { email },
+        create: { id: userId, email },
+      });
+    }
+
+    // ✅ Fetch last income
     const lastIncomeRecord = await prisma.income.findFirst({
       where: { userId },
       orderBy: { createdAt: "desc" },
     });
 
+    // ✅ Fetch total expenses
     const totalExpensesResult = await prisma.expense.aggregate({
       where: { userId },
       _sum: { amount: true },
