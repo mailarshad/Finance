@@ -6,7 +6,12 @@ import { useUser, SignOutButton } from "@clerk/nextjs"; // Clerk imports
 
 type Category = { id: string; name: string };
 type Income = { id: number; amount: number; createdAt: string };
-type Expense = { id: number; amount: number; category?: Category; createdAt: string };
+type Expense = {
+  id: number;
+  amount: number;
+  category?: Category;
+  createdAt: string;
+};
 
 export default function Dashboard() {
   const [categories, setCategories] = useState<Category[]>([]);
@@ -18,9 +23,20 @@ export default function Dashboard() {
   const [selectedCategory, setSelectedCategory] = useState("");
   const [newCategory, setNewCategory] = useState("");
 
+  const [currency, setCurrency] = useState("USD");
+  const currencyOptions = ["USD", "EUR", "GBP", "PKR", "JPY", "INR"];
+
   const [aiTips, setAiTips] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const { user } = useUser();
+
+  // Currency formatter
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat("en", {
+      style: "currency",
+      currency,
+    }).format(value);
+  };
 
   const fetchData = async () => {
     const [catsRes, expsRes, incsRes] = await Promise.all([
@@ -31,6 +47,16 @@ export default function Dashboard() {
     setCategories(await catsRes.json());
     setExpenses(await expsRes.json());
     setIncomes(await incsRes.json());
+  };
+  useEffect(() => {
+    fetchData();
+    const savedCurrency = localStorage.getItem("currency");
+    if (savedCurrency) setCurrency(savedCurrency);
+  }, []);
+
+  const handleCurrencyChange = (value: string) => {
+    setCurrency(value);
+    localStorage.setItem("currency", value);
   };
 
   useEffect(() => {
@@ -100,10 +126,9 @@ export default function Dashboard() {
   };
 
   return (
-    
     <main className="min-h-screen bg-gradient-to-b from-[#0b0b0d] to-black text-white p-8 font-sans">
       {/* Title */}
-       <motion.nav
+      <motion.nav
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         className="fixed top-0 left-0 right-0 bg-white/5 backdrop-blur-lg border-b border-white/10 px-6 py-4 flex items-center justify-between z-50"
@@ -112,12 +137,37 @@ export default function Dashboard() {
           Premium Finance
         </span>
         <div className="flex items-center gap-4">
+          {/* Currency Selector */}
+          <select
+            value={currency}
+            onChange={(e) => handleCurrencyChange(e.target.value)}
+            className="bg-black/40 border border-white/10 p-1 rounded text-sm"
+          >
+            {currencyOptions.map((cur) => (
+              <option key={cur} value={cur}>
+                {cur}
+              </option>
+            ))}
+          </select>
           {user && (
             <span className="text-sm text-gray-300">
               {user.primaryEmailAddress?.emailAddress}
             </span>
           )}
-          <SignOutButton>
+
+          <button
+            onClick={async () => {
+              if (!confirm("Are you sure? This will delete ALL your data."))
+                return;
+              await fetch("/api/clear-all", { method: "DELETE" });
+              fetchData(); // reload UI with empty state
+            }}
+            className="bg-yellow-500 hover:bg-yellow-600 px-3 py-1 rounded text-sm font-semibold transition-transform hover:scale-105 text-black"
+          >
+            Clear All Data
+          </button>
+
+          <SignOutButton redirectUrl="/sign-in">
             <button className="bg-red-500 hover:bg-red-600 px-3 py-1 rounded text-sm font-semibold transition-transform hover:scale-105">
               Logout
             </button>
@@ -136,15 +186,31 @@ export default function Dashboard() {
         animate={{ opacity: 1 }}
         className="text-center text-gray-400 mb-10"
       >
-        Take control of your financial future with intelligent tracking and AI-powered insights
+        Take control of your financial future with intelligent tracking and
+        AI-powered insights
       </motion.p>
 
       {/* Summary */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         {[
-          { title: "Income", value: `$${totalIncome.toFixed(2)}`, color: "text-green-400", sub: "Current month" },
-          { title: "Expenses", value: `$${totalExpenses.toFixed(2)}`, color: "text-red-400", sub: `${expenses.length} transactions` },
-          { title: "Balance", value: `$${balance.toFixed(2)}`, color: "text-white", sub: "Surplus" },
+          {
+            title: "Income",
+            value: formatCurrency(totalIncome),
+            color: "text-green-400",
+            sub: "Current month",
+          },
+          {
+            title: "Expenses",
+            value: formatCurrency(totalExpenses),
+            color: "text-red-400",
+            sub: `${expenses.length} transactions`,
+          },
+          {
+            title: "Balance",
+            value: formatCurrency(balance),
+            color: "text-white",
+            sub: "Surplus",
+          },
         ].map((item, i) => (
           <motion.div
             key={item.title}
@@ -199,16 +265,6 @@ export default function Dashboard() {
             onChange={(e) => setExpenseAmount(e.target.value)}
             className="w-full p-2 rounded bg-black/40 text-white mb-3 border border-white/10"
           />
-          <select
-            value={selectedCategory}
-            onChange={(e) => setSelectedCategory(e.target.value)}
-            className="w-full p-2 rounded bg-black/40 text-white mb-3 border border-white/10"
-          >
-            <option value="">Select category</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
           <input
             placeholder="Or create new category"
             value={newCategory}
@@ -249,11 +305,16 @@ export default function Dashboard() {
               className="flex justify-between bg-black/40 border border-white/5 p-3 rounded-lg"
             >
               <div>
-                <p className="text-red-400 font-semibold">${e.amount.toFixed(2)}</p>
-                <p className="text-sm text-gray-400">{e.category?.name || "Uncategorized"}</p>
+                <p className="text-red-400 font-semibold">
+                  {formatCurrency(e.amount)}
+                </p>
+                <p className="text-sm text-gray-400">
+                  {e.category?.name || "Uncategorized"}
+                </p>
               </div>
               <span className="text-xs text-gray-500">
-                {new Date(e.createdAt).toLocaleDateString()} {new Date(e.createdAt).toLocaleTimeString()}
+                {new Date(e.createdAt).toLocaleDateString()}{" "}
+                {new Date(e.createdAt).toLocaleTimeString()}
               </span>
             </motion.div>
           ))}
@@ -268,7 +329,8 @@ export default function Dashboard() {
       >
         <h2 className="font-bold mb-2">AI Savings Assistant</h2>
         <p className="text-gray-400 text-sm mb-4">
-          Get personalized savings recommendations based on your spending patterns and financial goals.
+          Get personalized savings recommendations based on your spending
+          patterns and financial goals.
         </p>
         <button
           onClick={fetchSavingsTips}
