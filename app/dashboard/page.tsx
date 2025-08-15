@@ -3,9 +3,8 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { useUser, SignOutButton } from "@clerk/nextjs";
-import { ToastContainer, toast } from 'react-toastify';
+import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
-import { notifySuccess, notifyError } from "@/lib/notify.js";
 
 type Category = { id: string; name: string };
 type Income = { id: number; amount: number; createdAt: string };
@@ -30,6 +29,9 @@ export default function Dashboard() {
   const [aiLoading, setAiLoading] = useState(false);
   const { user } = useUser();
 
+  // Client-side render flag
+  const [isClient, setIsClient] = useState(false);
+
   const formatCurrency = (value: number) =>
     new Intl.NumberFormat("en", { style: "currency", currency }).format(value);
 
@@ -45,18 +47,30 @@ export default function Dashboard() {
   };
 
   useEffect(() => {
+    setIsClient(true);
+
+    // Load initial data
     fetchData();
-    const savedCurrency =
-      typeof window !== "undefined" ? localStorage.getItem("currency") : null;
+
+    // Restore currency from localStorage
+    const savedCurrency = localStorage.getItem("currency");
     if (savedCurrency) setCurrency(savedCurrency);
+
+    // Suppress hydration mismatch logs in dev (caused by extensions)
+    const originalError = console.error;
+    console.error = (...args) => {
+      if (typeof args[0] === "string" && args[0].includes("hydration")) return;
+      originalError(...args);
+    };
+    return () => {
+      console.error = originalError;
+    };
   }, []);
 
   const handleCurrencyChange = (value: string) => {
     setCurrency(value);
     toast.info(`Currency changed to ${value}`);
-    if (typeof window !== "undefined") {
-      localStorage.setItem("currency", value);
-    }
+    localStorage.setItem("currency", value);
   };
 
   const addIncome = async () => {
@@ -145,7 +159,6 @@ export default function Dashboard() {
   return (
     <main className="min-h-screen bg-gradient-to-b from-[#0b0b0d] to-black text-white p-4 sm:p-8 font-sans">
       {/* Navbar */}
-
       <motion.nav
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -168,7 +181,7 @@ export default function Dashboard() {
             ))}
           </select>
 
-          {user && (
+          {isClient && user && (
             <div className="flex items-center gap-2">
               <img
                 src={user.imageUrl}
@@ -183,8 +196,6 @@ export default function Dashboard() {
 
           <button
             onClick={async () => {
-              if (!confirm("Are you sure? This will delete ALL your data."))
-                return;
               await fetch("/api/clear-all", { method: "DELETE" });
               fetchData();
             }}
@@ -215,50 +226,33 @@ export default function Dashboard() {
           animate={{ opacity: 1 }}
           className="text-center text-gray-400 mb-10 text-sm sm:text-base px-2"
         >
-          Take control of your financial future with intelligent tracking and
-          AI-powered insights
+          Take control of your financial future with intelligent tracking and AI-powered insights
         </motion.p>
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 mb-8">
-        {[
-          {
-            title: "Income",
-            value: formatCurrency(totalIncome),
-            color: "text-green-400",
-            sub: "Current month",
-          },
-          {
-            title: "Expenses",
-            value: formatCurrency(totalExpenses),
-            color: "text-red-400",
-            sub: `${expenses.length} transactions`,
-          },
-          {
-            title: "Balance",
-            value: formatCurrency(balance),
-            color: "text-white",
-            sub: "Surplus",
-          },
-        ].map((item, i) => (
-          <motion.div
-            key={item.title}
-            custom={i}
-            initial="hidden"
-            animate="visible"
-            variants={cardVariants}
-            className="bg-white/5 backdrop-blur-lg border border-white/10 p-4 sm:p-6 rounded-2xl shadow-lg hover:scale-105 transition-transform"
-          >
-            <p className="text-gray-400">{item.title}</p>
-            <p className={`${item.color} text-2xl sm:text-3xl font-bold`}>
-              {item.value}
-            </p>
-            <span className="text-xs text-gray-500">{item.sub}</span>
-          </motion.div>
-        ))}
-      </div>
-
+      {isClient && (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 mb-8">
+          {[
+            { title: "Income", value: formatCurrency(totalIncome), color: "text-green-400", sub: "Current month" },
+            { title: "Expenses", value: formatCurrency(totalExpenses), color: "text-red-400", sub: `${expenses.length} transactions` },
+            { title: "Balance", value: formatCurrency(balance), color: "text-white", sub: "Surplus" },
+          ].map((item, i) => (
+            <motion.div
+              key={item.title}
+              custom={i}
+              initial="hidden"
+              animate="visible"
+              variants={cardVariants}
+              className="bg-white/5 backdrop-blur-lg border border-white/10 p-4 sm:p-6 rounded-2xl shadow-lg hover:scale-105 transition-transform"
+            >
+              <p className="text-gray-400">{item.title}</p>
+              <p className={`${item.color} text-2xl sm:text-3xl font-bold`}>{item.value}</p>
+              <span className="text-xs text-gray-500">{item.sub}</span>
+            </motion.div>
+          ))}
+        </div>
+      )}
       {/* Forms */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 mb-8">
         {/* Add Income */}
@@ -334,31 +328,18 @@ export default function Dashboard() {
               className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-2 border-b border-white/10"
             >
               <div>
-                <p className="text-sm">
-                  {expense.category?.name || "Uncategorized"}
-                </p>
-                <p className="text-gray-400 text-sm">
-                  {formatCurrency(expense.amount)}
-                </p>
+                <p className="text-sm">{expense.category?.name || "Uncategorized"}</p>
+                <p className="text-gray-400 text-sm">{formatCurrency(expense.amount)}</p>
               </div>
               <button
-  onClick={async () => {
-    try {
-      const res = await fetch(`/api/expense/${expense.id}`, { method: "DELETE" });
-      if (res.ok) {
-        notifySuccess("Expense deleted!");
-        fetchData();
-      } else {
-        notifyError("Failed to delete expense");
-      }
-    } catch (error) {
-      notifyError("Something went wrong");
-    }
-  }}
-  className="bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded text-xs font-semibold transition-transform hover:scale-105 mt-2 sm:mt-0 w-full sm:w-auto"
->
-  Delete
-</button>
+                onClick={async () => {
+                  await fetch(`/api/expense/${expense.id}`, { method: "DELETE" });
+                  fetchData();
+                }}
+                className="bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded text-xs font-semibold transition-transform hover:scale-105 mt-2 sm:mt-0 w-full sm:w-auto"
+              >
+                Delete
+              </button>
             </div>
           ))}
         </div>
@@ -372,8 +353,7 @@ export default function Dashboard() {
       >
         <h2 className="font-bold mb-2">AI Savings Assistant</h2>
         <p className="text-gray-400 text-sm mb-4">
-          Get personalized savings recommendations based on your spending
-          patterns and financial goals.
+          Get personalized savings recommendations based on your spending patterns and financial goals.
         </p>
         <button
           onClick={fetchSavingsTips}
