@@ -14,6 +14,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    // Fetch user to get currency preference
+    const user = (await prisma.user.findUnique({
+      where: { id: userId },
+    })) as any;
+
+    const currency = user?.currency || "USD";
+
     // Fetch last 30 days expenses only for the user
     const expenses = await prisma.expense.findMany({
       where: {
@@ -31,10 +38,11 @@ export async function POST(req: Request) {
       },
     });
 
-    // Prepare prompt for AI
+    // Prepare prompt for AI with currency info
     const prompt = `
 You are a helpful and friendly personal finance assistant.
-Analyze the last 30 days of user expenses and provide 3 actionable savings tips based on the data.
+The user's preferred currency is ${currency}.
+Analyze the last 30 days of expenses and provide 3 actionable savings tips based on the data.
 
 Expenses: ${JSON.stringify(expenses)}
 Please list the tips clearly, numbered 1, 2, and 3.
@@ -50,7 +58,7 @@ Please list the tips clearly, numbered 1, 2, and 3.
 
     const tips = chat.choices?.[0]?.message?.content || "No tips available.";
 
-    return NextResponse.json({ tips });
+    return NextResponse.json({ tips, currency });
   } catch (error) {
     console.error("Error generating savings tips:", error);
     return NextResponse.json(
