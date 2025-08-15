@@ -164,8 +164,8 @@ export default function Dashboard() {
         animate={{ opacity: 1, y: 0 }}
         className="fixed top-0 left-0 right-0 bg-white/5 backdrop-blur-lg border-b border-white/10 px-4 sm:px-6 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 z-50"
       >
-        <span className="text-lg font-bold bg-gradient-to-r from-green-400 to-emerald-600 bg-clip-text text-transparent">
-          Premium Finance
+        <span className="text-[29px] font-bold bg-gradient-to-r from-green-400 to-emerald-600 bg-clip-text text-transparent">
+          SpendSense
         </span>
 
         <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
@@ -219,7 +219,7 @@ export default function Dashboard() {
           animate={{ opacity: 1, y: 0 }}
           className="text-3xl sm:text-4xl font-bold text-center mb-2 bg-gradient-to-r from-green-400 to-emerald-600 bg-clip-text text-transparent"
         >
-          Premium Finance
+          SpendSense
         </motion.h1>
         <motion.p
           initial={{ opacity: 0 }}
