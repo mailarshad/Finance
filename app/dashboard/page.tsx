@@ -46,32 +46,43 @@ export default function Dashboard() {
     setIncomes(await incsRes.json());
   };
 
-  useEffect(() => {
-    setIsClient(true);
+useEffect(() => {
+  setIsClient(true);
 
-    // Load initial data
-    fetchData();
+  // Load initial data
+  fetchData();
 
-    // Restore currency from localStorage
-    const savedCurrency = localStorage.getItem("currency");
-    if (savedCurrency) setCurrency(savedCurrency);
+  if (user) {
+    // Try to restore user-specific currency
+    const savedCurrency = localStorage.getItem(`currency_${user.id}`);
+    if (savedCurrency) {
+      setCurrency(savedCurrency);
+    } else {
+      // Default for new user
+      setCurrency("USD");
+      localStorage.setItem(`currency_${user.id}`, "USD");
+    }
+  }
 
-    // Suppress hydration mismatch logs in dev (caused by extensions)
-    const originalError = console.error;
-    console.error = (...args) => {
-      if (typeof args[0] === "string" && args[0].includes("hydration")) return;
-      originalError(...args);
-    };
-    return () => {
-      console.error = originalError;
-    };
-  }, []);
-
-  const handleCurrencyChange = (value: string) => {
-    setCurrency(value);
-    toast.info(`Currency changed to ${value}`);
-    localStorage.setItem("currency", value);
+  // Suppress hydration mismatch logs in dev
+  const originalError = console.error;
+  console.error = (...args) => {
+    if (typeof args[0] === "string" && args[0].includes("hydration")) return;
+    originalError(...args);
   };
+  return () => {
+    console.error = originalError;
+  };
+}, [user]);
+
+
+const handleCurrencyChange = (value: string) => {
+  setCurrency(value);
+  toast.info(`Currency changed to ${value}`);
+  if (user) {
+    localStorage.setItem(`currency_${user.id}`, value);
+  }
+};
 
   const addIncome = async () => {
     if (!incomeAmount) {
